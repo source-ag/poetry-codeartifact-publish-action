@@ -1,0 +1,70 @@
+name: "Poetry CodeArtifact publish Action"
+description: Github Action to build and publish a Python package to AWS CodeArtifact with Poetry
+inputs:
+  working-directory:
+    description: An optional working directory to cd into before building
+    required: false
+    default: .
+  aws-access-key-id:
+    description: AWS Access Key ID
+    required: true
+  aws-secret-access-key:
+    description: AWS Secret Access Key
+    required: true
+  aws-region:
+    description: AWS Region, e.g. eu-central-1
+    required: true
+  role-to-assume:
+    description: IAM Role to assume that has access to CodeArtifact
+    required: false
+  codeartifact-domain:
+    description: CodeArtifact domain to which the package repository belongs
+    required: true
+  codeartifact-domain-owner:
+    description: Owner (AWS Account) of the CodeArtifact domain
+    required: true
+  codeartifact-repository:
+    description: CodeArtifact repository to which to publish the Python package
+    required: true
+  python-version:
+    description: which Python version to use
+    required: false
+    default: "3.10"
+  poetry-version:
+    description: which Poetry version to use
+    required: false
+    default: "1.1.13"
+
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v2
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Check out
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ inputs.aws-access-key-id }}
+        aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        aws-region: ${{ inputs.aws-region }}
+        role-to-assume: ${{ inputs.role-to-assume }}
+        role-skip-session-tagging: true
+        role-duration-seconds: 3600
+    - name: Publish
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        export POETRY_VERSION=${{ inputs.poetry-version }} PATH=$HOME/.poetry/bin:$PATH
+        curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3 -
+        export CODEARTIFACT_USER=aws
+        export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain ${{ inputs.codeartifact-domain }} --domain-owner ${{ inputs.codeartifact-domain-owner }} --query authorizationToken --output text`
+        export CODEARTIFACT_REPOSITORY_URL=`aws codeartifact get-repository-endpoint --domain ${{ inputs.codeartifact-domain }} --domain-owner ${{ inputs.codeartifact-domain-owner }} --repository ${{ inputs.codeartifact-repository }} --format pypi --query repositoryEndpoint --output text`
+        poetry config repositories.${{ inputs.codeartifact-repository }} ${CODEARTIFACT_REPOSITORY_URL}
+        poetry config http-basic.${{ inputs.codeartifact-repository }} ${CODEARTIFACT_USER} ${CODEARTIFACT_AUTH_TOKEN}
+        poetry build
+        poetry publish -r ${{ inputs.codeartifact-repository }}
