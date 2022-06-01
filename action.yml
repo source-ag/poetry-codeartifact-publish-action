@@ -42,29 +42,32 @@ runs:
     - uses: actions/setup-python@v2
       with:
         python-version: ${{ inputs.python-version }}
+
     - name: Check out
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
+  
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: ${{ inputs.poetry-version }}
+    
+    - name: Authenticate to CodeArtifact
+      uses: source-ag/codeartifact-login-action@main
       with:
         aws-access-key-id: ${{ inputs.aws-access-key-id }}
         aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
         aws-region: ${{ inputs.aws-region }}
         role-to-assume: ${{ inputs.role-to-assume }}
-        role-skip-session-tagging: true
-        role-duration-seconds: 3600
+        codeartifact-domain: ${{ inputs.codeartifact-domain }}
+        codeartifact-domain-owner: ${{ inputs.codeartifact-domain-owner }}
+        codeartifact-repository: ${{ inputs.codeartifact-repository }}
+        configure-poetry: true
+  
     - name: Publish
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
-        export POETRY_VERSION=${{ inputs.poetry-version }} PATH=$HOME/.poetry/bin:$PATH
-        curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3 -
-        export CODEARTIFACT_USER=aws
-        export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain ${{ inputs.codeartifact-domain }} --domain-owner ${{ inputs.codeartifact-domain-owner }} --query authorizationToken --output text`
-        export CODEARTIFACT_REPOSITORY_URL=`aws codeartifact get-repository-endpoint --domain ${{ inputs.codeartifact-domain }} --domain-owner ${{ inputs.codeartifact-domain-owner }} --repository ${{ inputs.codeartifact-repository }} --format pypi --query repositoryEndpoint --output text`
-        poetry config repositories.${{ inputs.codeartifact-repository }} ${CODEARTIFACT_REPOSITORY_URL}
-        poetry config http-basic.${{ inputs.codeartifact-repository }} ${CODEARTIFACT_USER} ${CODEARTIFACT_AUTH_TOKEN}
         poetry build
         poetry publish -r ${{ inputs.codeartifact-repository }}
