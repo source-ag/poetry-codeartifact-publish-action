@@ -38,6 +38,12 @@ inputs:
     description: if code checkout should be skipped. Useful if you already do a code checkout earlier in your workflow
     required: false
     default: "false" # warning: composite actions only allow strings as input!
+  add-py-typed-marker:
+    description: |
+      If true, adds a `py.typed` marker file before publishing, to indicate to package consumers that your package is 
+      typed. See also: https://typing.readthedocs.io/en/latest/spec/distributing.html#packaging-type-information
+    required: false
+    default: "false" # warning: composite actions only allow strings as input!
 
 runs:
   using: "composite"
@@ -68,6 +74,12 @@ runs:
         codeartifact-domain-owner: ${{ inputs.codeartifact-domain-owner }}
         codeartifact-repository: ${{ inputs.codeartifact-repository }}
         configure-poetry: true
+
+    - name: Add py.typed marker
+      if: ${{ inputs.add-py-typed-marker == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: touch py.typed
 
     - name: Publish
       shell: bash
